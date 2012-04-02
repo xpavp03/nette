@@ -65,16 +65,13 @@
 			if ($(form).data('nette-submittedBy') && $($(form).data('nette-submittedBy')).prop('formnovalidate')) {
 				return true;
 			}
-			for (var i = 0; i < form.elements.length; i++) {
-				var elem = form.elements[i];
-				if (!(elem.nodeName.toLowerCase() in {input:1, select:1, textarea:1}) || (elem.type in {hidden:1, submit:1, image:1, reset: 1}) || elem.disabled || elem.readonly) {
-					continue;
+			var valid = true;
+			$(':input:enabled:not(:hidden, :submit, :image, :reset, [readonly])', form).each(function(){
+				if (!$.nette.validateControl(this)) {
+					return valid = false;
 				}
-				if (!$.nette.validateControl(elem)) {
-					return false;
-				}
-			}
-			return true;
+			});
+			return valid;
 		},
 
 
@@ -177,17 +174,15 @@
 
 
 		toggleForm: function(form) {
-			for (var i = 0; i < form.elements.length; i++) {
-				if (form.elements[i].nodeName.toLowerCase() in {input:1, select:1, textarea:1, button:1}) {
-					$.nette.toggleControl(form.elements[i]);
-				}
-			}
+			$(':input', form).each(function() {
+				$.nette.toggleControl(this);
+			});
 		},
 
 
-		toggleControl: function(elem, rules, firsttime) {
+		toggleControl: function(elem, rules) {
 			rules = rules || eval('[' + ($(elem).attr('data-nette-rules') || '') + ']');
-			var has = false, __hasProp = Object.prototype.hasOwnProperty, handler = function() { $.nette.toggleForm(elem.form); };
+			var has = false, __hasProp = Object.prototype.hasOwnProperty;
 
 			for (var id = 0, len = rules.length; id < len; id++) {
 				var rule = rules[id], op = rule.op.match(/(~)?([^?]+)/);
@@ -201,19 +196,8 @@
 				if (success === null) { continue; }
 				if (rule.neg) { success = !success; }
 
-				if ($.nette.toggleControl(elem, rule.rules, firsttime) || rule.toggle) {
+				if ($.nette.toggleControl(elem, rule.rules) || rule.toggle) {
 					has = true;
-					if (firsttime) {
-						if (!el.nodeName) { // radio
-							for (var i = 0; i < el.length; i++) {
-								$(el[i]).on('click.nette', handler);
-							}
-						} else if (el.nodeName.toLowerCase() === 'select') {
-							$(el).on('change.nette', handler);
-						} else {
-							$(el).on('click.nette', handler);
-						}
-					}
 					for (var id2 in rule.toggle || []) {
 						if (__hasProp.call(rule.toggle, id2)) {
 							$('#' + id2).toggle(success ? rule.toggle[id2] : !rule.toggle[id2]);
@@ -222,50 +206,35 @@
 				}
 			}
 			return has;
-		},
-
-
-		initForm: function(form) {
-			form.noValidate = true;
-
-			$(form).on('submit.nette', function() {
-				return $.nette.validateForm(form);
-			});
-
-			$(form).on('click.nette', function(e) {
-				e = e || event;
-				var target = e.target || e.srcElement;
-				$(form).data('nette-submittedBy', (target.type in {submit:1, image:1}) ? target : null);
-			});
-
-			for (var i = 0; i < form.elements.length; i++) {
-				$.nette.toggleControl(form.elements[i], null, true);
-			}
-
-			if ($.browser.msie) {
-				var labels = {},
-					wheelHandler = function() { return false; },
-					clickHandler = function() { document.getElementById(this.htmlFor).focus(); return false; };
-
-				for (i = 0, elms = form.getElementsByTagName('label'); i < elms.length; i++) {
-					labels[elms[i].htmlFor] = elms[i];
-				}
-
-				for (i = 0, elms = form.getElementsByTagName('select'); i < elms.length; i++) {
-					$(elms[i]).on('mousewheel.nette', wheelHandler); // prevents accidental change in IE
-					if (labels[elms[i].htmlId]) {
-						$(labels[elms[i].htmlId]).on('click.nette', clickHandler); // prevents deselect in IE 5 - 6
-					}
-				}
-			}
 		}
 	};
 
 
+	$(document).on('submit.nette', 'form', function() {
+		return $.nette.validateForm(this);
+	});
+
+	$(document).on('click.nette', ':submit, :image', function() {
+		this.form && $(this.form).data('nette-submittedBy', this);
+	});
+
+	$(document).on('click.nette', 'input, textarea, button', function() {
+		this.form && $.nette.toggleForm(this.form);
+	});
+
+	$(document).on('change.nette', 'select', function() {
+		this.form && $.nette.toggleForm(this.form);
+	});
+
+	if ($.browser.msie) { // prevents accidental change in IE < 8
+		$(document).on('mousewheel.nette', 'select', false);
+	}
+
 	$(function() {
-		for (var i = 0; i < document.forms.length; i++) {
-			$.nette.initForm(document.forms[i]);
-		}
+		$('form').each(function() {
+			this.noValidate = true; // disable HTML 5 validation
+			$.nette.toggleForm(this);
+		});
 	});
 
 })(jQuery);
