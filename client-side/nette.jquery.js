@@ -9,61 +9,30 @@
 (function($, undefined) {
 
 	$.nette = {
-		addEvent: function(element, on, callback) {
-			var original = element['on' + on];
-			element['on' + on] = function () {
-				if (typeof original === 'function' && original.apply(element, arguments) === false) {
-					return false;
-				}
-				return callback.apply(element, arguments);
-			};
-		},
-
-
 		getValue: function(elem) {
-			var i, len;
 			if (!elem) {
-				return null;
+				return undefined;
 
-			} else if (!elem.nodeName) { // radio
-				for (i = 0, len = elem.length; i < len; i++) {
-					if (elem[i].checked) {
-						return elem[i].value;
-					}
-				}
-				return null;
+			} else if (!elem.nodeName) { // radio set
+				return $(elem).filter(':checked').val();
 
 			} else if (elem.nodeName.toLowerCase() === 'select') {
-				var index = elem.selectedIndex, options = elem.options;
-
-				if (index < 0) {
-					return null;
-
-				} else if (elem.type === 'select-one') {
-					return options[index].value;
-				}
-
-				for (i = 0, values = [], len = options.length; i < len; i++) {
-					if (options[i].selected) {
-						values.push(options[i].value);
-					}
-				}
-				return values;
+				return $(elem).val();
 
 			} else if (elem.type === 'checkbox') {
 				return elem.checked;
 
 			} else if (elem.type === 'radio') {
-				return $.nette.getValue(elem.form.elements[elem.name].nodeName ? [elem] : elem.form.elements[elem.name]);
+				return $(elem.form.elements[elem.name]).filter(':checked').val();
 
 			} else {
-				return elem.value.replace(/^\s+|\s+$/g, '');
+				return $.trim($(elem).val());
 			}
 		},
 
 
 		validateControl: function(elem, rules, onlyCheck) {
-			rules = rules || eval('[' + (elem.getAttribute('data-nette-rules') || '') + ']');
+			rules = rules || eval('[' + ($(elem).attr('data-nette-rules') || '') + ']');
 			for (var id = 0, len = rules.length; id < len; id++) {
 				var rule = rules[id], op = rule.op.match(/(~)?([^?]+)/);
 				rule.neg = op[1];
@@ -93,7 +62,7 @@
 
 		validateForm: function(sender) {
 			var form = sender.form || sender;
-			if (form['nette-submittedBy'] && form['nette-submittedBy'].getAttribute('formnovalidate') !== null) {
+			if ($(form).data('nette-submittedBy') && $($(form).data('nette-submittedBy')).prop('formnovalidate')) {
 				return true;
 			}
 			for (var i = 0; i < form.elements.length; i++) {
@@ -122,9 +91,7 @@
 		validateRule: function(elem, op, arg) {
 			var val = $.nette.getValue(elem);
 
-			if (elem.getAttribute) {
-				if (val === elem.getAttribute('data-nette-empty-value')) { val = ''; }
-			}
+			if (val === $(elem).attr('data-nette-empty-value')) { val = ''; }
 
 			if (op.charAt(0) === ':') {
 				op = op.substr(1);
@@ -137,7 +104,7 @@
 
 		validators: {
 			filled: function(elem, arg, val) {
-				return val !== '' && val !== false && val !== null;
+				return val !== '' && val !== false && val !== null && val !== undefined;
 			},
 
 			valid: function(elem, arg, val) {
@@ -148,7 +115,7 @@
 				if (arg === undefined) {
 					return null;
 				}
-				arg = $.nette.isArray(arg) ? arg : [arg];
+				arg = $.isArray(arg) ? arg : [arg];
 				for (var i = 0, len = arg.length; i < len; i++) {
 					if (val == (arg[i].control ? $.nette.getValue(elem.form.elements[arg[i].control]) : arg[i])) {
 						return true;
@@ -166,7 +133,7 @@
 			},
 
 			length: function(elem, arg, val) {
-				arg = $.nette.isArray(arg) ? arg : [arg, arg];
+				arg = $.isArray(arg) ? arg : [arg, arg];
 				return (arg[0] === null || val.length >= arg[0]) && (arg[1] === null || val.length <= arg[1]);
 			},
 
@@ -200,11 +167,11 @@
 			},
 
 			range: function(elem, arg, val) {
-				return $.nette.isArray(arg) ? ((arg[0] === null || parseFloat(val) >= arg[0]) && (arg[1] === null || parseFloat(val) <= arg[1])) : null;
+				return $.isArray(arg) ? ((arg[0] === null || parseFloat(val) >= arg[0]) && (arg[1] === null || parseFloat(val) <= arg[1])) : null;
 			},
 
 			submitted: function(elem, arg, val) {
-				return elem.form['nette-submittedBy'] === elem;
+				return $(elem.form).data('nette-submittedBy') === elem;
 			}
 		},
 
@@ -219,7 +186,7 @@
 
 
 		toggleControl: function(elem, rules, firsttime) {
-			rules = rules || eval('[' + (elem.getAttribute('data-nette-rules') || '') + ']');
+			rules = rules || eval('[' + ($(elem).attr('data-nette-rules') || '') + ']');
 			var has = false, __hasProp = Object.prototype.hasOwnProperty, handler = function() { $.nette.toggleForm(elem.form); };
 
 			for (var id = 0, len = rules.length; id < len; id++) {
@@ -239,16 +206,18 @@
 					if (firsttime) {
 						if (!el.nodeName) { // radio
 							for (var i = 0; i < el.length; i++) {
-								$.nette.addEvent(el[i], 'click', handler);
+								$(el[i]).on('click.nette', handler);
 							}
 						} else if (el.nodeName.toLowerCase() === 'select') {
-							$.nette.addEvent(el, 'change', handler);
+							$(el).on('change.nette', handler);
 						} else {
-							$.nette.addEvent(el, 'click', handler);
+							$(el).on('click.nette', handler);
 						}
 					}
 					for (var id2 in rule.toggle || []) {
-						if (__hasProp.call(rule.toggle, id2)) { $.nette.toggle(id2, success ? rule.toggle[id2] : !rule.toggle[id2]); }
+						if (__hasProp.call(rule.toggle, id2)) {
+							$('#' + id2).toggle(success ? rule.toggle[id2] : !rule.toggle[id2]);
+						}
 					}
 				}
 			}
@@ -256,32 +225,24 @@
 		},
 
 
-		toggle: function(id, visible) {
-			var elem = document.getElementById(id);
-			if (elem) {
-				elem.style.display = visible ? "" : "none";
-			}
-		},
-
-
 		initForm: function(form) {
 			form.noValidate = true;
 
-			$.nette.addEvent(form, 'submit', function() {
+			$(form).on('submit.nette', function() {
 				return $.nette.validateForm(form);
 			});
 
-			$.nette.addEvent(form, 'click', function(e) {
+			$(form).on('click.nette', function(e) {
 				e = e || event;
 				var target = e.target || e.srcElement;
-				form['nette-submittedBy'] = (target.type in {submit:1, image:1}) ? target : null;
+				$(form).data('nette-submittedBy', (target.type in {submit:1, image:1}) ? target : null);
 			});
 
 			for (var i = 0; i < form.elements.length; i++) {
 				$.nette.toggleControl(form.elements[i], null, true);
 			}
 
-			if (/MSIE/.exec(navigator.userAgent)) {
+			if ($.browser.msie) {
 				var labels = {},
 					wheelHandler = function() { return false; },
 					clickHandler = function() { document.getElementById(this.htmlFor).focus(); return false; };
@@ -291,22 +252,17 @@
 				}
 
 				for (i = 0, elms = form.getElementsByTagName('select'); i < elms.length; i++) {
-					$.nette.addEvent(elms[i], 'mousewheel', wheelHandler); // prevents accidental change in IE
+					$(elms[i]).on('mousewheel.nette', wheelHandler); // prevents accidental change in IE
 					if (labels[elms[i].htmlId]) {
-						$.nette.addEvent(labels[elms[i].htmlId], 'click', clickHandler); // prevents deselect in IE 5 - 6
+						$(labels[elms[i].htmlId]).on('click.nette', clickHandler); // prevents deselect in IE 5 - 6
 					}
 				}
 			}
-		},
-
-
-		isArray: function(arg) {
-			return Object.prototype.toString.call(arg) === '[object Array]';
 		}
 	};
 
 
-	$.nette.addEvent(window, 'load', function () {
+	$(function() {
 		for (var i = 0; i < document.forms.length; i++) {
 			$.nette.initForm(document.forms[i]);
 		}
